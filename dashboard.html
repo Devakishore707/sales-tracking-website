@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nakshathra Sales Tracker - Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- App Header with Shop Logo, Clock & Logout -->
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-logo">N</div>
+      <div>
+        <h1 class="brand-name">Nakshathra</h1>
+        <div class="brand-subtitle">Sales Tracker</div>
+      </div>
+    </div>
+    
+    <!-- System Clock (Displays Real-time Date and Time in Corner) -->
+    <div style="display: flex; align-items: center; gap: 1.5rem;">
+      <div class="system-clock-box" id="systemClock">
+        <span class="system-time" id="clockTime">--:--:--</span>
+        <span class="system-date" id="clockDate">Loading date...</span>
+      </div>
+      <button class="btn btn-outline btn-logout" id="logoutBtn">
+        <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+        <span>Logout</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="fade-in">
+    
+    <!-- Navigation Tabs -->
+    <nav class="dashboard-nav">
+      <button class="nav-tab active" id="tabSales">
+        <i data-lucide="shopping-bag" style="width: 18px; height: 18px;"></i>
+        <span>Mark Sales</span>
+      </button>
+      <button class="nav-tab nav-tab-close" id="tabClose">
+        <i data-lucide="archive" style="width: 18px; height: 18px;"></i>
+        <span>Close a Day</span>
+      </button>
+    </nav>
+
+    <!-- Top Live Stats Summary (3 columns: Cash, UPI, and total sales) -->
+    <section class="dashboard-overview">
+      <div class="stat-box highlight">
+        <span class="stat-label">Today's Sales</span>
+        <span class="stat-value" id="statTotal">₹0.00</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">Cash collected</span>
+        <span class="stat-value" id="statCash">₹0.00</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">UPI collected</span>
+        <span class="stat-value" id="statUpi">₹0.00</span>
+      </div>
+    </section>
+
+    <!-- TAB 1: MARK SALES VIEW -->
+    <section class="tab-pane active" id="viewSales">
+      <div class="dashboard-content-grid">
+        
+        <!-- Left: Sales Entry Form -->
+        <div class="card">
+          <h2 style="font-size: 1.25rem; margin-bottom: 1.25rem;">Log New Sale</h2>
+          
+          <form id="saleForm">
+            <!-- Item Name Input (New field) -->
+            <div class="form-group">
+              <label for="saleItemName">Item Name</label>
+              <input 
+                type="text" 
+                id="saleItemName" 
+                class="input-field" 
+                placeholder="Enter item name (e.g. Ring, Lipstick, Bangle)"
+                autocomplete="off"
+              >
+            </div>
+
+            <!-- Category Selection -->
+            <div class="form-group">
+              <label>Product Category</label>
+              <div class="options-grid">
+                <div class="option-btn category-selector selected" data-value="Silver">
+                  <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
+                  <span>Silver</span>
+                </div>
+                <div class="option-btn category-selector" data-value="Gold Covering">
+                  <i data-lucide="crown" style="width: 14px; height: 14px;"></i>
+                  <span>Gold Covering</span>
+                </div>
+                <div class="option-btn category-selector" data-value="Cosmetics">
+                  <i data-lucide="heart" style="width: 14px; height: 14px;"></i>
+                  <span>Cosmetics</span>
+                </div>
+                <div class="option-btn category-selector" data-value="Italian Silver">
+                  <i data-lucide="gem" style="width: 14px; height: 14px;"></i>
+                  <span>Italian Silver</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Price and Quantity -->
+            <div class="number-row">
+              <div class="form-group">
+                <label for="saleAmount">Price (₹)</label>
+                <div class="input-suffix-wrapper">
+                  <span class="input-prefix">₹</span>
+                  <input 
+                    type="number" 
+                    id="saleAmount" 
+                    class="input-field" 
+                    placeholder="Amount"
+                    min="1" 
+                    required
+                  >
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="saleQty">Qty</label>
+                <input 
+                  type="number" 
+                  id="saleQty" 
+                  class="input-field" 
+                  value="1" 
+                  min="1" 
+                  required
+                >
+              </div>
+            </div>
+
+            <!-- Payment Mode (Cash / UPI only) -->
+            <div class="form-group">
+              <label>Payment Method</label>
+              <div class="options-grid">
+                <div class="option-btn payment-selector selected" data-value="Cash">
+                  <i data-lucide="banknote" style="width: 14px; height: 14px;"></i>
+                  <span>Cash</span>
+                </div>
+                <div class="option-btn payment-selector" data-value="UPI">
+                  <i data-lucide="smartphone" style="width: 14px; height: 14px;"></i>
+                  <span>UPI</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add Button -->
+            <button type="submit" class="btn btn-primary" id="saveSaleBtn">
+              <i data-lucide="check" style="width: 18px; height: 18px;"></i>
+              <span>Save Sale</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right: Real-time Sales list for Today -->
+        <div class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-size: 1.25rem;">Sales Log (Today)</h2>
+            <span id="salesCount" style="font-size: 0.8rem; background-color: var(--border-color); padding: 0.25rem 0.6rem; border-radius: 20px; font-weight: 500;">0 entries</span>
+          </div>
+
+          <div class="table-wrapper">
+            <table id="salesTable">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th style="text-align: right;">Price</th>
+                  <th style="text-align: center;">Qty</th>
+                  <th style="text-align: right;">Total</th>
+                  <th>Pay Mode</th>
+                  <th style="text-align: center;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="salesTableBody">
+                <!-- Logged rows injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="salesEmptyState" class="empty-state">
+            <div class="empty-state-icon"><i data-lucide="inbox"></i></div>
+            <p>No sales logged today yet.</p>
+            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Enter transaction details on the left to add a record.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: CLOSE A DAY VIEW -->
+    <section class="tab-pane" id="viewClose">
+      <div class="dashboard-content-grid">
+        
+        <!-- Left Column: Today's Summary & Close Trigger -->
+        <div class="card" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <h2 style="font-size: 1.25rem; border-left: 3px solid var(--silver-primary); padding-left: 0.75rem;">Daily Close Summary</h2>
+          <p style="font-size: 0.85rem; margin-top: -0.5rem;">Review today's total collection before closing the shop day. Once closed, today's entries will reset.</p>
+          
+          <div class="report-grid">
+            <!-- Breakdown by Category -->
+            <div class="report-summary-box">
+              <h3>Product Sales</h3>
+              <div class="summary-row"><span>Silver</span><span id="closeCatSilver">₹0.00</span></div>
+              <div class="summary-row"><span>Gold Covering</span><span id="closeCatGold">₹0.00</span></div>
+              <div class="summary-row"><span>Cosmetics</span><span id="closeCatCosmetics">₹0.00</span></div>
+              <div class="summary-row"><span>Italian Silver</span><span id="closeCatItalian">₹0.00</span></div>
+            </div>
+
+            <!-- Breakdown by Payment (Cash & UPI only) -->
+            <div class="report-summary-box">
+              <h3>Payments Received</h3>
+              <div class="summary-row"><span>Cash Total</span><span id="closePayCash">₹0.00</span></div>
+              <div class="summary-row"><span>UPI Total</span><span id="closePayUpi">₹0.00</span></div>
+              <div class="summary-row"><span>Total Sales</span><span id="closeTotalAmount">₹0.00</span></div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+            <div>
+              <p style="font-size: 0.75rem; color: var(--text-muted);">CLOSURE TIMESTAMP</p>
+              <p style="font-size: 0.85rem; font-weight: 500; font-family: monospace;" id="closureTimestamp">Fetching current time...</p>
+            </div>
+            <button class="btn close-day-button" id="closeDayBtn">
+              <i data-lucide="lock"></i>
+              <span>Close Day & Reset</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Historic Closures Logs (Cash & UPI columns only) -->
+        <div class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+          <h2 style="font-size: 1.25rem;">Previous Closed Days</h2>
+          
+          <div class="table-wrapper">
+            <table id="historyTable">
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th style="text-align: right;">Cash</th>
+                  <th style="text-align: right;">UPI</th>
+                  <th style="text-align: right;">Grand Total</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Historic days injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="historyEmptyState" class="empty-state">
+            <div class="empty-state-icon"><i data-lucide="history"></i></div>
+            <p>No historical day closures found.</p>
+            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Closing a day records a permanent entry here.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Elegant Toast Popups for notifications -->
+  <div class="toast" id="toastBox">
+    <span class="toast-icon" id="toastIcon">✓</span>
+    <span class="toast-message" id="toastMsg">Operation successful!</span>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nakshathra Silver and Gold Covering - Login</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-logo">N</div>
+      <div>
+        <h1 class="brand-name">Nakshathra</h1>
+        <div class="brand-subtitle">Silver & Gold Covering</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="fade-in">
+    <div class="login-container">
+      
+      <!-- Left side: Store Introduction & Products Showcase -->
+      <section class="store-intro">
+        <h2 class="store-title-large">Nakshathra Silver & Gold Covering</h2>
+        <p>Premium collection of traditional gold-covering ornaments, pure silver articles, elegant Italian silver designs, and quality cosmetics.</p>
+        
+        <div class="product-shelf">
+          <div class="product-item">
+            <div class="product-icon silver">
+              <i data-lucide="sparkles"></i>
+            </div>
+            <div class="product-info">
+              <h3>Silver</h3>
+              <p>Anklets, rings, & plates</p>
+            </div>
+          </div>
+
+          <div class="product-item">
+            <div class="product-icon gold">
+              <i data-lucide="crown"></i>
+            </div>
+            <div class="product-info">
+              <h3>Gold Covering</h3>
+              <p>Plated necklaces & bangles</p>
+            </div>
+          </div>
+
+          <div class="product-item">
+            <div class="product-icon cosmetic">
+              <i data-lucide="heart"></i>
+            </div>
+            <div class="product-info">
+              <h3>Cosmetics</h3>
+              <p>Daily makeup & skincare</p>
+            </div>
+          </div>
+
+          <div class="product-item">
+            <div class="product-icon italian">
+              <i data-lucide="gem"></i>
+            </div>
+            <div class="product-info">
+              <h3>Italian Silver</h3>
+              <p>Premium imported jewelry</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right side: Simple Login Card -->
+      <section class="card login-card" id="loginCard">
+        <h2>Shop Login</h2>
+        <p style="margin-bottom: 1.5rem; font-size: 0.85rem;">Enter credentials to open sales tracker.</p>
+        
+        <!-- Error message banner -->
+        <div class="error-banner" id="errorBanner">
+          <i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i>
+          <span id="errorMessage">Invalid username or password.</span>
+        </div>
+
+        <form id="loginForm" autocomplete="off">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input 
+              type="text" 
+              id="username" 
+              class="input-field" 
+              placeholder="Enter username"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="password-input-wrapper">
+              <input 
+                type="password" 
+                id="password" 
+                class="input-field" 
+                placeholder="Enter password"
+                required
+              >
+              <button type="button" class="password-toggle-btn" id="passwordToggleBtn" aria-label="Toggle Password Visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="loginBtn" style="margin-top: 1rem;">
+            <span>Access Dashboard</span>
+            <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
+          </button>
+        </form>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="auth.js"></script>
+</body>
+</html>
