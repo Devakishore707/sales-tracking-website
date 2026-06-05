@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nakshathra Sales Tracker - Dashboard</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -20,8 +22,12 @@
       </div>
     </div>
     
-    <!-- System Clock (Displays Real-time Date and Time in Corner) -->
+    <!-- System Clock & Database Status -->
     <div style="display: flex; align-items: center; gap: 1.5rem;">
+      <span class="db-status-badge offline" id="dbStatusBadge">
+        <i data-lucide="cloud-off" style="width: 12px; height: 12px;"></i>
+        <span>Offline</span>
+      </span>
       <div class="system-clock-box" id="systemClock">
         <span class="system-time" id="clockTime">--:--:--</span>
         <span class="system-date" id="clockDate">Loading date...</span>

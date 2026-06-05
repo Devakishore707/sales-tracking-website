@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nakshathra Sales Tracker - Admin Dashboard</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -20,8 +22,12 @@
       </div>
     </div>
     
-    <!-- System Clock (Displays Real-time Date and Time in Corner) -->
+    <!-- System Clock & Database Status -->
     <div style="display: flex; align-items: center; gap: 1.5rem;">
+      <span class="db-status-badge offline" id="dbStatusBadge">
+        <i data-lucide="cloud-off" style="width: 12px; height: 12px;"></i>
+        <span>Offline</span>
+      </span>
       <div class="system-clock-box" id="systemClock">
         <span class="system-time" id="clockTime">--:--:--</span>
         <span class="system-date" id="clockDate">Loading date...</span>
@@ -35,6 +41,44 @@
 
   <main class="fade-in">
     
+    <!-- Database Setup Guide (Collapsible Card) -->
+    <div class="card sql-helper-box" id="sqlSetupBox">
+      <div class="collapsible-trigger" id="sqlTrigger">
+        <h3 style="font-size: 1rem; color: var(--gold-light); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+          <i data-lucide="database" style="width: 18px; height: 18px; color: var(--gold-primary);"></i>
+          <span>Supabase Database Initial Setup Guide</span>
+        </h3>
+        <i data-lucide="chevron-down" id="sqlChevron" style="width: 18px; height: 18px; color: var(--text-secondary); transition: var(--transition-fast);"></i>
+      </div>
+      <div class="collapsible-content" id="sqlContent">
+        <p style="font-size: 0.8rem; margin-top: 0.75rem; color: var(--text-secondary);">
+          To enable sync, you need to create the table in your Supabase project. Copy the SQL code below, go to your 
+          <a href="https://supabase.com/dashboard/project/kmcsyjueebznvvgpjhtl" target="_blank" style="color: var(--gold-primary); font-weight: 500; text-decoration: underline;">Supabase SQL Editor</a>, paste it, and click <strong>Run</strong>:
+        </p>
+        <div class="sql-code-block" style="position: relative;">
+          <button class="copy-code-btn" id="copySqlBtn">Copy Code</button>
+          <code id="sqlCode">-- 1. Create the sales table
+create table if not exists sales (
+  no bigserial primary key,
+  product_name text not null,
+  category text not null,
+  price numeric(12, 2) not null,
+  quantity integer not null,
+  total numeric(12, 2) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. Enable Row Level Security (RLS)
+alter table sales enable row level security;
+
+-- 3. Create policies for anonymous access
+create policy "Allow public inserts" on sales for insert to anon with check (true);
+create policy "Allow public selects" on sales for select to anon using (true);
+create policy "Allow public deletes" on sales for delete to anon using (true);</code>
+        </div>
+      </div>
+    </div>
+
     <!-- Navigation Tabs -->
     <nav class="dashboard-nav">
       <button class="nav-tab active" id="tabReports">
@@ -111,12 +155,8 @@
           <span class="stat-value" id="reportTotalAmount">₹0.00</span>
         </div>
         <div class="stat-box">
-          <span class="stat-label">Cash Collection</span>
-          <span class="stat-value" id="reportCashTotal">₹0.00</span>
-        </div>
-        <div class="stat-box">
-          <span class="stat-label">UPI Collection</span>
-          <span class="stat-value" id="reportUpiTotal">₹0.00</span>
+          <span class="stat-label">Total Items Sold</span>
+          <span class="stat-value" id="reportItemsTotal">0</span>
         </div>
       </section>
 

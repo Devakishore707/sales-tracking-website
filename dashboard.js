@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 1. Session & Role Verification
-  // Must be logged in as 'staff' (or admin visiting) to view this page
   const isLoggedIn = sessionStorage.getItem('nakshathra_session') === 'active';
   const role = sessionStorage.getItem('nakshathra_role');
   if (!isLoggedIn || (role !== 'staff' && role !== 'admin')) {
@@ -14,11 +13,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // 2. DOM Elements Selection
+  // 2. Supabase Configurations
+  const SUPABASE_URL = 'https://kmcsyjueebznvvgpjhtl.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttY3N5anVlZWJ6bnZ2Z3BqaHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NjQ3MjYsImV4cCI6MjA5NjI0MDcyNn0.QSWHxwKN2lwVXmjrqskxC0UahD1zPOff-alz6NPYQcM';
+  let supabase = null;
+  let isDbOnline = false;
+
+  // Initialize Supabase Client
+  if (window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
+  // 3. DOM Elements Selection
   const logoutBtn = document.getElementById('logoutBtn');
   const clockTime = document.getElementById('clockTime');
   const clockDate = document.getElementById('clockDate');
   const closureTimestamp = document.getElementById('closureTimestamp');
+  const dbStatusBadge = document.getElementById('dbStatusBadge');
   
   // Navigation Tabs & Views
   const tabSales = document.getElementById('tabSales');
@@ -26,12 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewSales = document.getElementById('viewSales');
   const viewClose = document.getElementById('viewClose');
 
-  // Stats Card Indicators (Removed Card)
+  // Stats Card Indicators
   const statTotal = document.getElementById('statTotal');
   const statCash = document.getElementById('statCash');
   const statUpi = document.getElementById('statUpi');
 
-  // Form Fields & Controls (Added saleItemName)
+  // Form Fields & Controls
   const saleForm = document.getElementById('saleForm');
   const saleItemName = document.getElementById('saleItemName');
   const saleAmount = document.getElementById('saleAmount');
@@ -44,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const salesEmptyState = document.getElementById('salesEmptyState');
   const salesCount = document.getElementById('salesCount');
 
-  // Close Day summary details (Removed closePayCard)
+  // Close Day summary details
   const closeCatSilver = document.getElementById('closeCatSilver');
   const closeCatGold = document.getElementById('closeCatGold');
   const closeCatCosmetics = document.getElementById('closeCatCosmetics');
@@ -63,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toastIcon = document.getElementById('toastIcon');
   const toastMsg = document.getElementById('toastMsg');
 
-  // 3. Application State Data (Stored in LocalStorage)
+  // 4. Application State Data (Cached in LocalStorage)
   let todaySales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
   let historyClosures = JSON.parse(localStorage.getItem('nakshathra_history_closures')) || [];
   
@@ -71,7 +82,58 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedCategory = 'Silver';
   let selectedPayment = 'Cash';
 
-  // 4. System Clock Sync (Corner display & autofill reference)
+  // 5. Database Sync Status Badge Manager
+  function updateDbStatusBadge(status) {
+    if (!dbStatusBadge) return;
+    
+    dbStatusBadge.className = `db-status-badge ${status}`;
+    const icon = dbStatusBadge.querySelector('i');
+    const text = dbStatusBadge.querySelector('span');
+
+    if (status === 'connected') {
+      if (icon) icon.setAttribute('data-lucide', 'cloud-lightning');
+      if (text) text.textContent = 'Database Connected';
+      isDbOnline = true;
+    } else if (status === 'setup') {
+      if (icon) icon.setAttribute('data-lucide', 'alert-triangle');
+      if (text) text.textContent = 'Table Setup Needed';
+      isDbOnline = false;
+    } else {
+      if (icon) icon.setAttribute('data-lucide', 'cloud-off');
+      if (text) text.textContent = 'Offline Mode';
+      isDbOnline = false;
+    }
+    
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
+  }
+
+  // Check Supabase Connectivity
+  async function checkDbConnection() {
+    if (!supabase) {
+      updateDbStatusBadge('offline');
+      return;
+    }
+
+    try {
+      // Test querying 1 row from sales table
+      const { error } = await supabase.from('sales').select('no').limit(1);
+      if (error) {
+        if (error.code === 'PGRST116' || (error.message && error.message.includes('does not exist'))) {
+          updateDbStatusBadge('setup');
+        } else {
+          updateDbStatusBadge('offline');
+        }
+      } else {
+        updateDbStatusBadge('connected');
+      }
+    } catch (err) {
+      updateDbStatusBadge('offline');
+    }
+  }
+
+  // 6. System Clock Sync (Corner display & autofill reference)
   function updateClock() {
     const now = new Date();
     
@@ -98,13 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
 
-  // 5. Logout Execution
+  // 7. Logout Execution
   logoutBtn.addEventListener('click', () => {
     sessionStorage.clear();
     window.location.href = 'index.html';
   });
 
-  // 6. Navigation Tabs Toggle Functions
+  // 8. Navigation Tabs Toggle Functions
   function switchTab(activeTab, inactiveTab, activeView, inactiveView) {
     inactiveTab.classList.remove('active');
     activeTab.classList.add('active');
@@ -125,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     switchTab(tabClose, tabSales, viewClose, viewSales);
   });
 
-  // 7. Form Selection Click Handlers
+  // 9. Form Selection Click Handlers
   categorySelectors.forEach(btn => {
     btn.addEventListener('click', () => {
       categorySelectors.forEach(b => b.classList.remove('selected'));
@@ -142,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 8. Calculation and UI Render Helpers
+  // 10. Calculation and UI Render Helpers
   function formatRupees(value) {
     return '₹' + Number(value).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
@@ -167,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statUpi.textContent = formatRupees(upiTotal);
   }
 
-  // Render Logged Sales Table for Today (Added Item Name column injection)
+  // Render Logged Sales Table for Today
   function renderTodaySalesTable() {
     salesTableBody.innerHTML = '';
     
@@ -180,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     salesEmptyState.style.display = 'none';
     salesCount.textContent = `${todaySales.length} ${todaySales.length === 1 ? 'entry' : 'entries'}`;
 
-    // Sort showing newest sales first
+    // Sort showing newest sales first (we use the index reverse here)
     const sortedSales = [...todaySales].reverse();
 
     sortedSales.forEach(sale => {
@@ -266,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     historyEmptyState.style.display = 'none';
 
-    // Show newest closure dates first
     const sortedHistory = [...historyClosures].reverse();
 
     sortedHistory.forEach(day => {
@@ -284,24 +345,70 @@ document.addEventListener('DOMContentLoaded', () => {
   // Display feedback notification popups
   function showToast(message, type = 'success') {
     toastMsg.textContent = message;
-    
-    // Toggle theme configurations
     toastBox.className = `toast show ${type}`;
     toastIcon.textContent = type === 'success' ? '✓' : '⚠';
 
-    // Hide after duration
     setTimeout(() => {
       toastBox.classList.remove('show');
     }, 2800);
   }
 
-  // Save changes wrapper
+  // Save local storage cache
   function saveToLocalStorage() {
     localStorage.setItem('nakshathra_today_sales', JSON.stringify(todaySales));
     localStorage.setItem('nakshathra_history_closures', JSON.stringify(historyClosures));
   }
 
-  // 8.5 Sync to Google Sheets Form in Background (Product Details)
+  // 11. Supabase Fetching today's sales
+  async function loadTodaySales() {
+    if (isDbOnline && supabase) {
+      try {
+        // Calculate start and end range of local day
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
+
+        // Fetch sales within today's range
+        const { data, error } = await supabase
+          .from('sales')
+          .select('*')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+
+        if (error) {
+          console.error('Supabase query error, falling back to cache:', error);
+        } else if (data) {
+          todaySales = data.map(row => {
+            const dateObj = new Date(row.created_at);
+            const timeStr = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            return {
+              id: row.no, // Database auto-incrementing ID
+              timestamp: timeStr,
+              datetime: row.created_at,
+              itemName: row.product_name,
+              category: row.category,
+              price: parseFloat(row.price),
+              qty: parseInt(row.quantity),
+              total: parseFloat(row.total),
+              payMode: 'Cash' // For local display dashboard. Paymode is not stored in DB.
+            };
+          });
+          saveToLocalStorage();
+        }
+      } catch (err) {
+        console.error('Network error fetching from Supabase:', err);
+      }
+    } else {
+      // Offline fallback: load from local storage
+      todaySales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
+    }
+
+    updateStatsDashboard();
+    renderTodaySalesTable();
+  }
+
+  // 12. Google Sheets sync backup functions
   function submitToGoogleForm(sale) {
     const formUrl = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLScYuvQxdCGbylhwfnajD0pIJaL3emikSS8PP8qpeh27EpEoow/formResponse';
     const formData = new URLSearchParams();
@@ -314,20 +421,11 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(formUrl, {
       method: 'POST',
       mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData.toString()
-    })
-    .then(() => {
-      console.log('Successfully submitted transaction to Google Form');
-    })
-    .catch((err) => {
-      console.error('Error submitting to Google Form:', err);
-    });
+    }).catch(err => console.error('Google Form sync error:', err));
   }
 
-  // 8.6 Sync Day Closure Categories to Google Form (Daily Collection)
   function submitClosureToGoogleForm(itemType, qty, revenue) {
     const formUrl = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLSfmhAtcHEk4TWmmxfSAgKul2DyXbjn_5D130diPEwGjTVHKBQ/formResponse';
     const formData = new URLSearchParams();
@@ -338,27 +436,17 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(formUrl, {
       method: 'POST',
       mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData.toString()
-    })
-    .then(() => {
-      console.log(`Successfully submitted closure for ${itemType} to Google Form`);
-    })
-    .catch((err) => {
-      console.error(`Error submitting closure for ${itemType} to Google Form:`, err);
-    });
+    }).catch(err => console.error('Google Closure Form sync error:', err));
   }
 
-  // 9. Interactive Operations: Add and Delete Transaction
-  saleForm.addEventListener('submit', (e) => {
+  // 13. Interactive Operations: Add and Delete Transaction
+  saleForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const price = parseFloat(saleAmount.value);
     const qty = parseInt(saleQty.value);
-    
-    // If Item Name is blank, generate a placeholder based on category
     const enteredItemName = saleItemName.value.trim() || ('Generic ' + selectedCategory);
 
     if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
@@ -366,15 +454,42 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Capture system date & time dynamically for this sale
     const saleDateObj = new Date();
-    
-    // Time string format: 08:35 PM
     const localTimeStr = saleDateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    // Create item packet (includes itemName)
+    let finalId = 'sale_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    let isSynced = false;
+
+    // A. Sync to Supabase in real-time
+    if (isDbOnline && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('sales')
+          .insert([
+            {
+              product_name: enteredItemName,
+              category: selectedCategory,
+              price: price,
+              quantity: qty,
+              total: price * qty
+            }
+          ])
+          .select();
+
+        if (error) {
+          console.error('Supabase write error, using local fallback:', error);
+        } else if (data && data.length > 0) {
+          finalId = data[0].no; // Grab PostgreSQL serial number key
+          isSynced = true;
+        }
+      } catch (err) {
+        console.error('Supabase network error, using local fallback:', err);
+      }
+    }
+
+    // B. Build Sale packet and log locally
     const newSale = {
-      id: 'sale_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      id: finalId,
       timestamp: localTimeStr,
       datetime: saleDateObj.toISOString(),
       itemName: enteredItemName,
@@ -385,11 +500,10 @@ document.addEventListener('DOMContentLoaded', () => {
       payMode: selectedPayment
     };
 
-    // Save and Sync
     todaySales.push(newSale);
     saveToLocalStorage();
     
-    // Submit background request to user's Google Form
+    // C. Submit background request to Google Form
     submitToGoogleForm(newSale);
     
     // Refresh GUI representation
@@ -401,27 +515,57 @@ document.addEventListener('DOMContentLoaded', () => {
     saleAmount.value = '';
     saleQty.value = 1;
     
-    showToast('Sale logged successfully!');
+    if (isSynced) {
+      showToast('Sale logged and synced to Supabase!');
+    } else {
+      showToast('Sale logged locally (Offline mode).');
+    }
   });
 
   // Deletion logic
-  function deleteSale(id) {
+  async function deleteSale(id) {
+    let isSyncedDelete = false;
+
+    // If ID is numeric, it is a Supabase table primary serial key 'no'
+    if (isDbOnline && supabase && !isNaN(id)) {
+      try {
+        const { error } = await supabase
+          .from('sales')
+          .delete()
+          .eq('no', id);
+
+        if (!error) {
+          isSyncedDelete = true;
+        } else {
+          console.error('Supabase deletion error:', error);
+        }
+      } catch (err) {
+        console.error('Supabase delete network error:', err);
+      }
+    }
+
+    // Always delete locally
     todaySales = todaySales.filter(s => s.id !== id);
     saveToLocalStorage();
 
     updateStatsDashboard();
     renderTodaySalesTable();
-    showToast('Transaction removed.', 'error');
+    
+    if (isSyncedDelete) {
+      showToast('Transaction removed from Supabase.', 'error');
+    } else {
+      showToast('Transaction removed locally.', 'error');
+    }
   }
 
-  // 10. Close a Day Action (Embeds line items in closed log for Admin reports)
+  // 14. Close a Day Action (Locally archives summary logs)
   closeDayBtn.addEventListener('click', () => {
     if (todaySales.length === 0) {
       showToast('No sales records to close today.', 'error');
       return;
     }
 
-    const confirmClose = confirm('Are you sure you want to close today\'s sales log? This action registers the totals in your history book and clears today\'s board.');
+    const confirmClose = confirm('Are you sure you want to close today\'s sales log? This action registers the totals in your local history logs and resets today\'s board.');
     
     if (!confirmClose) return;
 
@@ -463,24 +607,18 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (sale.payMode === 'UPI') upiSum += sale.total;
     });
 
-    // Capture precise closure timestamp from system date and time
     const closeDateObj = new Date();
     const closureDateString = closeDateObj.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true
     });
 
-    // Create history record (embedding the list of today's items)
     const closureEntry = {
       id: 'close_' + Date.now(),
       datetime: closureDateString,
-      dateStringISO: closeDateObj.toISOString().split('T')[0], // e.g. "2026-06-04" for easy admin daily filtering
+      dateStringISO: closeDateObj.toISOString().split('T')[0],
       year: closeDateObj.getFullYear(),
-      month: closeDateObj.getMonth() + 1, // 1-indexed (1-12)
+      month: closeDateObj.getMonth() + 1,
       cashTotal: cashSum,
       upiTotal: upiSum,
       grandTotal: grandSum,
@@ -489,19 +627,19 @@ document.addEventListener('DOMContentLoaded', () => {
       cosmeticsTotal: cosmeticSum,
       italianTotal: italianSum,
       itemCount: itemCount,
-      items: todaySales // Embed the individual line sales for admin grouping & reports
+      items: todaySales
     };
 
-    // Save and shift
+    // Save locally
     historyClosures.push(closureEntry);
     
-    // Submit category aggregates to the daily report Google Form
+    // Submit category aggregates to the daily collections Google Form
     if (silverQty > 0) submitClosureToGoogleForm('Silver', silverQty, silverSum);
     if (goldQty > 0) submitClosureToGoogleForm('Gold Covering', goldQty, goldSum);
     if (cosmeticQty > 0) submitClosureToGoogleForm('Cosmetics', cosmeticQty, cosmeticSum);
     if (italianQty > 0) submitClosureToGoogleForm('Italian Silver', italianQty, italianSum);
 
-    todaySales = []; // clear today's entries
+    todaySales = []; // clear local today entries
     saveToLocalStorage();
 
     // Rerender all displays
@@ -510,14 +648,18 @@ document.addEventListener('DOMContentLoaded', () => {
     calculateCloseSummary();
     renderHistoryTable();
 
-    // Return view to Mark Sales so they are ready for the next shift
+    // Return view to Mark Sales
     switchTab(tabSales, tabClose, viewSales, viewClose);
     
-    showToast('Day closed and totals archived!');
+    showToast('Day closed and totals archived locally!');
   });
 
-  // 11. Initial Run Configuration
-  updateStatsDashboard();
-  renderTodaySalesTable();
-  renderHistoryTable();
+  // 15. Initial Load Routing
+  async function init() {
+    await checkDbConnection();
+    await loadTodaySales();
+    renderHistoryTable();
+  }
+  
+  init();
 });
