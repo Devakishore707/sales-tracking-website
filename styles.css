@@ -1083,3 +1083,39 @@ tr:last-child td {
   max-height: 600px;
   overflow-y: auto;
 }
+
+/* PDF Download Panel & Switch User Button styles */
+.pdf-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btn-switch-user {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  width: auto;
+  border-radius: 4px;
+  height: 2.2rem;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  color: var(--gold-primary);
+  background-color: transparent;
+}
+
+.btn-switch-user:hover {
+  background-color: rgba(212, 175, 55, 0.08);
+  border-color: var(--gold-primary);
+}
+
+@media (max-width: 768px) {
+  .pdf-buttons-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .pdf-buttons-grid {
+    grid-template-columns: 1fr;
+  }
+}

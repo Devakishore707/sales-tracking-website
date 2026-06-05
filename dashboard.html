@@ -32,6 +32,10 @@
         <span class="system-time" id="clockTime">--:--:--</span>
         <span class="system-date" id="clockDate">Loading date...</span>
       </div>
+      <button class="btn btn-outline btn-switch-user" id="switchUserBtn">
+        <i data-lucide="users" style="width: 16px; height: 16px;"></i>
+        <span>Switch User</span>
+      </button>
       <button class="btn btn-outline btn-logout" id="logoutBtn">
         <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
         <span>Logout</span>
@@ -53,19 +57,19 @@
       </button>
     </nav>
 
-    <!-- Top Live Stats Summary (3 columns: Cash, UPI, and total sales) -->
+    <!-- Top Live Stats Summary (Today, Month, Year Sales) -->
     <section class="dashboard-overview">
       <div class="stat-box highlight">
         <span class="stat-label">Today's Sales</span>
         <span class="stat-value" id="statTotal">₹0.00</span>
       </div>
       <div class="stat-box">
-        <span class="stat-label">Cash collected</span>
-        <span class="stat-value" id="statCash">₹0.00</span>
+        <span class="stat-label">This Month's Sales</span>
+        <span class="stat-value" id="statMonth">₹0.00</span>
       </div>
       <div class="stat-box">
-        <span class="stat-label">UPI collected</span>
-        <span class="stat-value" id="statUpi">₹0.00</span>
+        <span class="stat-label">This Year's Sales</span>
+        <span class="stat-value" id="statYear">₹0.00</span>
       </div>
     </section>
 

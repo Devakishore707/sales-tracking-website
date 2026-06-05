@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 3. DOM Elements Selection
+  const switchUserBtn = document.getElementById('switchUserBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const clockTime = document.getElementById('clockTime');
   const clockDate = document.getElementById('clockDate');
@@ -39,8 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Stats Card Indicators
   const statTotal = document.getElementById('statTotal');
-  const statCash = document.getElementById('statCash');
-  const statUpi = document.getElementById('statUpi');
+  const statMonth = document.getElementById('statMonth');
+  const statYear = document.getElementById('statYear');
 
   // Form Fields & Controls
   const saleForm = document.getElementById('saleForm');
@@ -160,7 +161,14 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
 
-  // 7. Logout Execution
+  // 7. Switch User & Logout Execution
+  if (switchUserBtn) {
+    switchUserBtn.addEventListener('click', () => {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    });
+  }
+
   logoutBtn.addEventListener('click', () => {
     sessionStorage.clear();
     window.location.href = 'index.html';
@@ -212,21 +220,77 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Update Live Top Dashboard Totals
-  function updateStatsDashboard() {
-    let grandTotal = 0;
-    let cashTotal = 0;
-    let upiTotal = 0;
+  // Update Live Top Dashboard Totals (Today, Month, Year Sales)
+  async function loadTopStats() {
+    let todayTotal = 0;
+    let monthTotal = 0;
+    let yearTotal = 0;
 
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    if (isDbOnline && supabase) {
+      try {
+        const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
+        const { data, error } = await supabase
+          .from('sales')
+          .select('total, created_at')
+          .gte('created_at', startOfYear.toISOString());
+
+        if (!error && data) {
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const monthStart = new Date(currentYear, now.getMonth(), 1, 0, 0, 0, 0);
+
+          data.forEach(sale => {
+            const saleDate = new Date(sale.created_at);
+            const amt = parseFloat(sale.total) || 0;
+            if (saleDate >= todayStart) {
+              todayTotal += amt;
+            }
+            if (saleDate >= monthStart) {
+              monthTotal += amt;
+            }
+            yearTotal += amt;
+          });
+
+          statTotal.textContent = formatRupees(todayTotal);
+          statMonth.textContent = formatRupees(monthTotal);
+          statYear.textContent = formatRupees(yearTotal);
+          return;
+        }
+      } catch (err) {
+        console.error('Error querying Supabase for top stats:', err);
+      }
+    }
+
+    // Local Storage Offline Fallback
     todaySales.forEach(sale => {
-      grandTotal += sale.total;
-      if (sale.payMode === 'Cash') cashTotal += sale.total;
-      else if (sale.payMode === 'UPI') upiTotal += sale.total;
+      todayTotal += sale.total;
     });
 
-    statTotal.textContent = formatRupees(grandTotal);
-    statCash.textContent = formatRupees(cashTotal);
-    statUpi.textContent = formatRupees(upiTotal);
+    let histMonthTotal = 0;
+    let histYearTotal = 0;
+    historyClosures.forEach(day => {
+      if (day.year === currentYear) {
+        histYearTotal += day.grandTotal;
+        if (day.month === currentMonth) {
+          histMonthTotal += day.grandTotal;
+        }
+      }
+    });
+
+    monthTotal = todayTotal + histMonthTotal;
+    yearTotal = todayTotal + histYearTotal;
+
+    statTotal.textContent = formatRupees(todayTotal);
+    statMonth.textContent = formatRupees(monthTotal);
+    statYear.textContent = formatRupees(yearTotal);
+  }
+
+  function updateStatsDashboard() {
+    loadTopStats();
   }
 
   // Render Logged Sales Table for Today
