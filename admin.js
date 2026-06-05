@@ -1,4 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // 0. DOM Elements Selection (for Clock & Badge)
+  const clockTime = document.getElementById('clockTime');
+  const clockDate = document.getElementById('clockDate');
+  const dbStatusBadge = document.getElementById('dbStatusBadge');
+
+  // System Clock Sync (Corner display) - RUN FIRST & SAFELY
+  function updateClock() {
+    try {
+      const now = new Date();
+      const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+      const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      
+      if (clockTime) clockTime.textContent = now.toLocaleTimeString('en-US', timeOptions);
+      if (clockDate) clockDate.textContent = now.toLocaleDateString('en-US', dateOptions).toUpperCase();
+    } catch (e) {
+      console.error('Clock tick error:', e);
+    }
+  }
+
+  try {
+    updateClock();
+    setInterval(updateClock, 1000);
+  } catch (err) {
+    console.error('Error starting clock:', err);
+  }
+
   // Initialize Lucide icons
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
@@ -24,12 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
-  // 3. DOM Elements Selection
+  // 3. DOM Elements Selection (Rest of elements)
   const switchUserBtn = document.getElementById('switchUserBtn');
   const logoutBtn = document.getElementById('logoutBtn');
-  const clockTime = document.getElementById('clockTime');
-  const clockDate = document.getElementById('clockDate');
-  const dbStatusBadge = document.getElementById('dbStatusBadge');
 
   // Compact SQL Copy helper
   const copySqlBtn = document.getElementById('copySqlBtn');
@@ -40,10 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const statYear = document.getElementById('statYear');
 
   // PDF report buttons
+  const reportTodayBtn = document.getElementById('reportTodayBtn');
   const report7dBtn = document.getElementById('report7dBtn');
   const report14dBtn = document.getElementById('report14dBtn');
   const report60dBtn = document.getElementById('report60dBtn');
   const report90dBtn = document.getElementById('report90dBtn');
+
+  // Danger zone buttons
+  const clearDatabaseBtn = document.getElementById('clearDatabaseBtn');
 
   // Main Tabs & Views
   const tabReports = document.getElementById('tabReports');
@@ -66,13 +93,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterMonth = document.getElementById('filterMonth');
   const filterYear = document.getElementById('filterYear');
 
-  // Report Display Values (Removed reportCashTotal and reportUpiTotal)
+  // Report Display Values
   const reportTotalAmount = document.getElementById('reportTotalAmount');
   const reportItemsTotal = document.getElementById('reportItemsTotal');
   const reportSilver = document.getElementById('reportSilver');
   const reportGold = document.getElementById('reportGold');
   const reportCosmetics = document.getElementById('reportCosmetics');
-  const reportItalian = document.getElementById('reportItalian');
 
   // Reports Sales Table
   const reportSalesTableBody = document.getElementById('reportSalesTableBody');
@@ -89,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentReportMode = 'Daily'; // Daily, Monthly, Yearly
   let selectedItemCategory = 'Silver';
 
-  // 5. Database Connection Check
+  // 5. Database Sync Status Badge Manager
   function updateDbStatusBadge(status) {
     if (!dbStatusBadge) return;
     
@@ -116,10 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function checkDbConnection() {
+  // Check Supabase Connectivity
+  async function checkDbConnection(silent = true) {
     if (!supabase) {
       updateDbStatusBadge('offline');
-      return;
+      return false;
     }
 
     try {
@@ -130,12 +157,30 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           updateDbStatusBadge('offline');
         }
+        return false;
       } else {
+        const wasOnline = isDbOnline;
         updateDbStatusBadge('connected');
+        if (!wasOnline && isDbOnline) {
+          await loadTopStats();
+          await renderReports();
+        }
+        return true;
       }
     } catch (err) {
       updateDbStatusBadge('offline');
+      return false;
     }
+  }
+
+  // Periodic Reconnect Check every 15 seconds
+  setInterval(() => checkDbConnection(true), 15000);
+
+  // Manual Reconnect on Badge Click
+  if (dbStatusBadge) {
+    dbStatusBadge.addEventListener('click', async () => {
+      await checkDbConnection(false);
+    });
   }
 
   // 6. SQL Copy Actions
@@ -152,18 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
-
-  // 7. System Clock Sync (Corner display)
-  function updateClock() {
-    const now = new Date();
-    const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    
-    if (clockTime) clockTime.textContent = now.toLocaleTimeString('en-US', timeOptions);
-    if (clockDate) clockDate.textContent = now.toLocaleDateString('en-US', dateOptions).toUpperCase();
-  }
-  updateClock();
-  setInterval(updateClock, 1000);
 
   // 8. Switch User & Logout Functionality
   if (switchUserBtn) {
@@ -238,15 +271,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 10.5 PDF Report Generation Engine
   async function generatePDFReport(days) {
+    // Open print window immediately during click handler context to bypass browser popup blockers
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up blocked! Please allow pop-ups for this website to generate PDF reports.');
+      return;
+    }
+    
+    printWindow.document.write('<html><head><title>Generating Report...</title><style>body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #666; }</style></head><body><h2>Generating PDF report, please wait...</h2></body></html>');
+    printWindow.document.close();
+
     const end = new Date();
     const start = new Date();
-    start.setDate(end.getDate() - days);
-    start.setHours(0, 0, 0, 0);
+    if (days === 0) {
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start.setDate(end.getDate() - days);
+      start.setHours(0, 0, 0, 0);
+    }
 
     let salesList = [];
     let isDataLoaded = false;
 
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         const { data, error } = await supabase
           .from('sales')
@@ -272,6 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           });
           isDataLoaded = true;
+          updateDbStatusBadge('connected');
         }
       } catch (err) {
         console.error('Error fetching PDF report data from Supabase:', err);
@@ -287,8 +335,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (day.dateStringISO >= startStr && day.dateStringISO <= endStr) {
           if (day.items && Array.isArray(day.items)) {
             day.items.forEach(item => {
+              const datePart = (day.datetime && typeof day.datetime === 'string') ? day.datetime.split(',')[0] : (day.dateStringISO || 'Unknown Date');
               salesList.push({
-                timestamp: `${day.datetime.split(',')[0]} ${item.timestamp}`,
+                timestamp: `${datePart} ${item.timestamp || ''}`,
                 itemName: item.itemName,
                 category: item.category,
                 price: item.price,
@@ -308,7 +357,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let silverSum = 0;
     let goldSum = 0;
     let cosmeticsSum = 0;
-    let italianSum = 0;
 
     salesList.forEach(item => {
       totalRevenue += item.total;
@@ -316,21 +364,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (item.category === 'Silver') silverSum += item.total;
       else if (item.category === 'Gold Covering') goldSum += item.total;
       else if (item.category === 'Cosmetics') cosmeticsSum += item.total;
-      else if (item.category === 'Italian Silver') italianSum += item.total;
     });
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Pop-up blocked! Please allow pop-ups for this website to generate PDF reports.');
-      return;
-    }
+    const reportPeriodText = days === 0 
+      ? `${start.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} (Today)`
+      : `${start.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} to ${end.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} (${days} Days)`;
 
-    printWindow.document.write(`
+    const reportHtml = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sales Report - Past \${days} Days</title>
+  <title>Sales Report - ${days === 0 ? 'Today' : 'Past ' + days + ' Days'}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -483,18 +528,18 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
   
   <div class="report-info">
-    <div><strong>Reporting Period:</strong> \${start.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} to \${end.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} (\${days} Days)</div>
-    <div><strong>Generated On:</strong> \${new Date().toLocaleString()}</div>
+    <div><strong>Reporting Period:</strong> ${reportPeriodText}</div>
+    <div><strong>Generated On:</strong> ${new Date().toLocaleString()}</div>
   </div>
   
   <div class="summary-cards">
     <div class="summary-card">
       <div class="summary-card-title">Total Sales Revenue</div>
-      <div class="summary-card-value">\${formatRupees(totalRevenue)}</div>
+      <div class="summary-card-value">${formatRupees(totalRevenue)}</div>
     </div>
     <div class="summary-card">
       <div class="summary-card-title">Total Items Sold</div>
-      <div class="summary-card-value">\${totalItemsSold}</div>
+      <div class="summary-card-value">${totalItemsSold}</div>
     </div>
   </div>
 
@@ -503,25 +548,21 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="breakdown-grid">
       <div class="breakdown-box">
         <div class="breakdown-label">Silver</div>
-        <div class="breakdown-value">\${formatRupees(silverSum)}</div>
+        <div class="breakdown-value">${formatRupees(silverSum)}</div>
       </div>
       <div class="breakdown-box">
         <div class="breakdown-label">Gold Covering</div>
-        <div class="breakdown-value">\${formatRupees(goldSum)}</div>
+        <div class="breakdown-value">${formatRupees(goldSum)}</div>
       </div>
       <div class="breakdown-box">
         <div class="breakdown-label">Cosmetics</div>
-        <div class="breakdown-value">\${formatRupees(cosmeticsSum)}</div>
-      </div>
-      <div class="breakdown-box">
-        <div class="breakdown-label">Italian Silver</div>
-        <div class="breakdown-value">\${formatRupees(italianSum)}</div>
+        <div class="breakdown-value">${formatRupees(cosmeticsSum)}</div>
       </div>
     </div>
   </div>
 
   <div class="table-section">
-    <h2>Transaction Records (\${salesList.length} Entries)</h2>
+    <h2>Transaction Records (${salesList.length} Entries)</h2>
     <table>
       <thead>
         <tr>
@@ -534,17 +575,17 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>
       </thead>
       <tbody>
-        \${salesList.map(sale => `
+        ${salesList.map(sale => `
           <tr>
-            <td>\${sale.timestamp}</td>
-            <td style="font-weight: 600;">\${sale.itemName}</td>
-            <td>\${sale.category}</td>
-            <td class="price-col">\${formatRupees(sale.price)}</td>
-            <td class="qty-col">\${sale.qty}</td>
-            <td class="total-col">\${formatRupees(sale.total)}</td>
+            <td>${sale.timestamp}</td>
+            <td style="font-weight: 600;">${sale.itemName}</td>
+            <td>${sale.category}</td>
+            <td class="price-col">${formatRupees(sale.price)}</td>
+            <td class="qty-col">${sale.qty}</td>
+            <td class="total-col">${formatRupees(sale.total)}</td>
           </tr>
         `).join('')}
-        \${salesList.length === 0 ? '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">No sales transactions logged during this period.</td></tr>' : ''}
+        ${salesList.length === 0 ? '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">No sales transactions logged during this period.</td></tr>' : ''}
       </tbody>
     </table>
   </div>
@@ -562,15 +603,70 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
-    `);
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(reportHtml);
     printWindow.document.close();
   }
 
   // Register PDF Download click handlers
+  if (reportTodayBtn) reportTodayBtn.addEventListener('click', () => generatePDFReport(0));
   if (report7dBtn) report7dBtn.addEventListener('click', () => generatePDFReport(7));
   if (report14dBtn) report14dBtn.addEventListener('click', () => generatePDFReport(14));
   if (report60dBtn) report60dBtn.addEventListener('click', () => generatePDFReport(60));
   if (report90dBtn) report90dBtn.addEventListener('click', () => generatePDFReport(90));
+
+  // Register Clear Database click handler (Danger Zone)
+  if (clearDatabaseBtn) {
+    clearDatabaseBtn.addEventListener('click', async () => {
+      const confirmFirst = confirm("Are you sure you want to permanently clear all data from the database? This action is irreversible.");
+      if (!confirmFirst) return;
+
+      const password = prompt("Please enter the clearance password to proceed:");
+      if (password === null) return; // User cancelled
+      if (password !== 'clear@123') {
+        alert("Incorrect password! Database clearing aborted.");
+        return;
+      }
+
+      if (isDbOnline && supabase) {
+        try {
+          const { error } = await supabase
+            .from('sales')
+            .delete()
+            .gt('no', 0);
+
+          if (error) {
+            alert("Failed to clear Supabase database: " + error.message);
+            return;
+          }
+          
+          // Also clear local storage caches to keep them in sync
+          localStorage.removeItem('nakshathra_today_sales');
+          localStorage.removeItem('nakshathra_history_closures');
+          historyClosures = [];
+          
+          alert("Database and local cache cleared successfully!");
+          
+          // Refresh metrics & table
+          await loadTopStats();
+          await renderReports();
+        } catch (err) {
+          alert("Error executing database clear: " + err.message);
+        }
+      } else {
+        // Offline fallback: clear local cache
+        localStorage.removeItem('nakshathra_today_sales');
+        localStorage.removeItem('nakshathra_history_closures');
+        historyClosures = [];
+        alert("Database is currently offline. Local caches cleared successfully!");
+        
+        await loadTopStats();
+        await renderReports();
+      }
+    });
+  }
 
   // 11. Dynamic Populator for Year Filters
   function populateYearFilter() {
@@ -608,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDataLoaded = false;
 
     // A. Attempt to Query Supabase
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         let queryStart = null;
         let queryEnd = null;
@@ -655,6 +751,7 @@ document.addEventListener('DOMContentLoaded', () => {
               };
             });
             isDataLoaded = true;
+            updateDbStatusBadge('connected');
           }
         }
       } catch (err) {
@@ -695,7 +792,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let silverSum = 0;
     let goldSum = 0;
     let cosmeticSum = 0;
-    let italianSum = 0;
 
     salesRecords.forEach(sale => {
       grandSum += sale.total;
@@ -704,7 +800,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sale.category === 'Silver') silverSum += sale.total;
       else if (sale.category === 'Gold Covering') goldSum += sale.total;
       else if (sale.category === 'Cosmetics') cosmeticSum += sale.total;
-      else if (sale.category === 'Italian Silver') italianSum += sale.total;
     });
 
     // Populate Overview metrics
@@ -715,7 +810,6 @@ document.addEventListener('DOMContentLoaded', () => {
     reportSilver.textContent = formatRupees(silverSum);
     reportGold.textContent = formatRupees(goldSum);
     reportCosmetics.textContent = formatRupees(cosmeticSum);
-    reportItalian.textContent = formatRupees(italianSum);
 
     // Populate Sales listing grid
     reportSalesTableBody.innerHTML = '';
@@ -768,7 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDataLoaded = false;
 
     // A. Query Supabase
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         const { data, error } = await supabase
           .from('sales')
@@ -782,6 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
             total: parseFloat(row.total)
           }));
           isDataLoaded = true;
+          updateDbStatusBadge('connected');
         }
       } catch (err) {
         console.error('Failed to load items sold from Supabase:', err);
@@ -861,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
         const { data, error } = await supabase
@@ -889,6 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
           statTotal.textContent = formatRupees(todayTotal);
           statMonth.textContent = formatRupees(monthTotal);
           statYear.textContent = formatRupees(yearTotal);
+          updateDbStatusBadge('connected');
           return;
         }
       } catch (err) {

@@ -186,11 +186,8 @@ create policy "Allow public deletes" on sales for delete to anon using (true);</
               <div class="summary-row" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; padding-top: 0.5rem;">
                 <span>Gold Covering</span><span id="reportGold" style="font-family: monospace; font-weight: 500;">₹0.00</span>
               </div>
-              <div class="summary-row" style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; padding-top: 0.5rem;">
-                <span>Cosmetics</span><span id="reportCosmetics" style="font-family: monospace; font-weight: 500;">₹0.00</span>
-              </div>
               <div class="summary-row" style="padding-top: 0.5rem;">
-                <span>Italian Silver</span><span id="reportItalian" style="font-family: monospace; font-weight: 500;">₹0.00</span>
+                <span>Cosmetics</span><span id="reportCosmetics" style="font-family: monospace; font-weight: 500;">₹0.00</span>
               </div>
             </div>
           </div>
@@ -200,6 +197,10 @@ create policy "Allow public deletes" on sales for delete to anon using (true);</
             <h2 style="font-size: 1.1rem; border-left: 3px solid var(--silver-primary); padding-left: 0.65rem;">Download PDF Reports</h2>
             <p style="font-size: 0.75rem; margin-top: -0.5rem; color: var(--text-secondary);">Select a duration to compile and save your sales reports from the Supabase database.</p>
             <div class="pdf-buttons-grid">
+              <button class="btn btn-outline" id="reportTodayBtn" style="padding: 0.5rem; font-size: 0.8rem; height: auto;">
+                <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                <span>Today</span>
+              </button>
               <button class="btn btn-outline" id="report7dBtn" style="padding: 0.5rem; font-size: 0.8rem; height: auto;">
                 <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
                 <span>7 Days</span>
@@ -217,6 +218,16 @@ create policy "Allow public deletes" on sales for delete to anon using (true);</
                 <span>90 Days</span>
               </button>
             </div>
+          </div>
+
+          <!-- Danger Zone Card -->
+          <div class="card" style="display: flex; flex-direction: column; gap: 1rem; border: 1px solid rgba(239, 68, 68, 0.2); background-color: rgba(239, 68, 68, 0.02);">
+            <h2 style="font-size: 1.1rem; border-left: 3px solid var(--error); padding-left: 0.65rem; color: var(--error);">Danger Zone</h2>
+            <p style="font-size: 0.75rem; margin-top: -0.5rem; color: var(--text-secondary);">Permanently erase all sales records from the Supabase database. This action is irreversible.</p>
+            <button class="btn btn-danger" id="clearDatabaseBtn" style="padding: 0.5rem; font-size: 0.8rem; height: auto; display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%;">
+              <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+              <span>Clear Database</span>
+            </button>
           </div>
         </div>
 
@@ -269,10 +280,6 @@ create policy "Allow public deletes" on sales for delete to anon using (true);</
         <button class="sub-tab sub-tab-category" data-category="Cosmetics">
           <i data-lucide="heart" style="width: 13px; height: 13px;"></i>
           <span>Cosmetics</span>
-        </button>
-        <button class="sub-tab sub-tab-category" data-category="Italian Silver">
-          <i data-lucide="gem" style="width: 13px; height: 13px;"></i>
-          <span>Italian Silver</span>
         </button>
       </div>
 

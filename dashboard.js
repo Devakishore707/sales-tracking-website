@@ -1,4 +1,38 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // 0. DOM Elements Selection (for Clock & Badge)
+  const clockTime = document.getElementById('clockTime');
+  const clockDate = document.getElementById('clockDate');
+  const closureTimestamp = document.getElementById('closureTimestamp');
+  const dbStatusBadge = document.getElementById('dbStatusBadge');
+
+  // System Clock Sync (Corner display & autofill reference) - RUN FIRST & SAFELY
+  function updateClock() {
+    try {
+      const now = new Date();
+      const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+      const timeString = now.toLocaleTimeString('en-US', timeOptions);
+      const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const dateString = now.toLocaleDateString('en-US', dateOptions).toUpperCase();
+
+      if (clockTime) clockTime.textContent = timeString;
+      if (clockDate) clockDate.textContent = dateString;
+
+      if (closureTimestamp) {
+        const closingOption = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+        closureTimestamp.textContent = now.toLocaleString('en-US', closingOption);
+      }
+    } catch (e) {
+      console.error('Clock tick error:', e);
+    }
+  }
+
+  try {
+    updateClock();
+    setInterval(updateClock, 1000);
+  } catch (err) {
+    console.error('Error starting clock:', err);
+  }
+
   // Initialize Lucide icons
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
@@ -24,13 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
-  // 3. DOM Elements Selection
+  // 3. DOM Elements Selection (Rest of elements)
   const switchUserBtn = document.getElementById('switchUserBtn');
   const logoutBtn = document.getElementById('logoutBtn');
-  const clockTime = document.getElementById('clockTime');
-  const clockDate = document.getElementById('clockDate');
-  const closureTimestamp = document.getElementById('closureTimestamp');
-  const dbStatusBadge = document.getElementById('dbStatusBadge');
+  const downloadTodayReportBtn = document.getElementById('downloadTodayReportBtn');
   
   // Navigation Tabs & Views
   const tabSales = document.getElementById('tabSales');
@@ -60,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeCatSilver = document.getElementById('closeCatSilver');
   const closeCatGold = document.getElementById('closeCatGold');
   const closeCatCosmetics = document.getElementById('closeCatCosmetics');
-  const closeCatItalian = document.getElementById('closeCatItalian');
   const closePayCash = document.getElementById('closePayCash');
   const closePayUpi = document.getElementById('closePayUpi');
   const closeTotalAmount = document.getElementById('closeTotalAmount');
@@ -76,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toastMsg = document.getElementById('toastMsg');
 
   // 4. Application State Data (Cached in LocalStorage)
-  let todaySales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
+  let todaySales = [];
   let historyClosures = JSON.parse(localStorage.getItem('nakshathra_history_closures')) || [];
   
   // Selected state buffers
@@ -111,14 +141,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Check Supabase Connectivity
-  async function checkDbConnection() {
+  async function checkDbConnection(silent = true) {
     if (!supabase) {
       updateDbStatusBadge('offline');
-      return;
+      return false;
     }
 
     try {
-      // Test querying 1 row from sales table
       const { error } = await supabase.from('sales').select('no').limit(1);
       if (error) {
         if (error.code === 'PGRST116' || (error.message && error.message.includes('does not exist'))) {
@@ -126,40 +155,37 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           updateDbStatusBadge('offline');
         }
+        return false;
       } else {
+        const wasOnline = isDbOnline;
         updateDbStatusBadge('connected');
+        if (!wasOnline && isDbOnline) {
+          if (!silent) showToast('Database connection established!');
+          await loadTodaySales();
+        }
+        return true;
       }
     } catch (err) {
       updateDbStatusBadge('offline');
+      return false;
     }
   }
 
-  // 6. System Clock Sync (Corner display & autofill reference)
-  function updateClock() {
-    const now = new Date();
-    
-    // Format Time: 08:30:15 PM
-    const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-    const timeString = now.toLocaleTimeString('en-US', timeOptions);
-    
-    // Format Date: THURSDAY, JUNE 4, 2026
-    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateString = now.toLocaleDateString('en-US', dateOptions).toUpperCase();
+  // Periodic Reconnect / Connection Check every 15 seconds
+  setInterval(() => checkDbConnection(true), 15000);
 
-    // Render live in corner
-    if (clockTime) clockTime.textContent = timeString;
-    if (clockDate) clockDate.textContent = dateString;
-
-    // Autofill / Display in closing window
-    if (closureTimestamp) {
-      const closingOption = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
-      closureTimestamp.textContent = now.toLocaleString('en-US', closingOption);
-    }
+  // Manual Reconnect on Badge Click
+  if (dbStatusBadge) {
+    dbStatusBadge.addEventListener('click', async () => {
+      showToast('Verifying connection to database...', 'success');
+      const connected = await checkDbConnection(false);
+      if (connected) {
+        showToast('Database is online!');
+      } else {
+        showToast('Database is offline. Using local storage.', 'error');
+      }
+    });
   }
-  
-  // Start clock ticking
-  updateClock();
-  setInterval(updateClock, 1000);
 
   // 7. Switch User & Logout Execution
   if (switchUserBtn) {
@@ -229,8 +255,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+    const lastClosureTime = localStorage.getItem('nakshathra_last_closure_time') || null;
+    const lastClosureDate = lastClosureTime ? new Date(lastClosureTime) : null;
 
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         const startOfYear = new Date(currentYear, 0, 1, 0, 0, 0, 0);
         const { data, error } = await supabase
@@ -246,7 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
           data.forEach(sale => {
             const saleDate = new Date(sale.created_at);
             const amt = parseFloat(sale.total) || 0;
-            if (saleDate >= todayStart) {
+            
+            // Only count in "Today's Sales" if it is after the last closure time!
+            if (saleDate >= todayStart && (!lastClosureDate || saleDate > lastClosureDate)) {
               todayTotal += amt;
             }
             if (saleDate >= monthStart) {
@@ -258,7 +288,10 @@ document.addEventListener('DOMContentLoaded', () => {
           statTotal.textContent = formatRupees(todayTotal);
           statMonth.textContent = formatRupees(monthTotal);
           statYear.textContent = formatRupees(yearTotal);
+          updateDbStatusBadge('connected');
           return;
+        } else if (error) {
+          console.error('Failed to query statistics from Supabase:', error);
         }
       } catch (err) {
         console.error('Error querying Supabase for top stats:', err);
@@ -266,7 +299,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Local Storage Offline Fallback
-    todaySales.forEach(sale => {
+    const cachedTodaySales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
+    const filteredTodaySales = lastClosureDate 
+      ? cachedTodaySales.filter(s => new Date(s.datetime) > lastClosureDate)
+      : cachedTodaySales;
+
+    filteredTodaySales.forEach(sale => {
       todayTotal += sale.total;
     });
 
@@ -351,7 +389,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let silverSum = 0;
     let goldSum = 0;
     let cosmeticSum = 0;
-    let italianSum = 0;
 
     let cashSum = 0;
     let upiSum = 0;
@@ -364,7 +401,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sale.category === 'Silver') silverSum += sale.total;
       else if (sale.category === 'Gold Covering') goldSum += sale.total;
       else if (sale.category === 'Cosmetics') cosmeticSum += sale.total;
-      else if (sale.category === 'Italian Silver') italianSum += sale.total;
 
       // Payment division
       if (sale.payMode === 'Cash') cashSum += sale.total;
@@ -374,7 +410,6 @@ document.addEventListener('DOMContentLoaded', () => {
     closeCatSilver.textContent = formatRupees(silverSum);
     closeCatGold.textContent = formatRupees(goldSum);
     closeCatCosmetics.textContent = formatRupees(cosmeticSum);
-    closeCatItalian.textContent = formatRupees(italianSum);
 
     closePayCash.textContent = formatRupees(cashSum);
     closePayUpi.textContent = formatRupees(upiSum);
@@ -425,7 +460,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 11. Supabase Fetching today's sales
   async function loadTodaySales() {
-    if (isDbOnline && supabase) {
+    const lastClosureTime = localStorage.getItem('nakshathra_last_closure_time') || null;
+
+    if (supabase) {
       try {
         // Calculate start and end range of local day
         const start = new Date();
@@ -434,18 +471,25 @@ document.addEventListener('DOMContentLoaded', () => {
         end.setHours(23, 59, 59, 999);
 
         // Fetch sales within today's range
-        const { data, error } = await supabase
+        let query = supabase
           .from('sales')
           .select('*')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
 
+        if (lastClosureTime) {
+          query = query.gt('created_at', lastClosureTime);
+        }
+
+        const { data, error } = await query;
+
         if (error) {
           console.error('Supabase query error, falling back to cache:', error);
+          loadLocalTodaySales(lastClosureTime);
         } else if (data) {
           todaySales = data.map(row => {
             const dateObj = new Date(row.created_at);
-            const timeStr = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            const timeStr = isNaN(dateObj.getTime()) ? '--:--' : dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
             return {
               id: row.no, // Database auto-incrementing ID
               timestamp: timeStr,
@@ -459,17 +503,31 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           });
           saveToLocalStorage();
+          updateDbStatusBadge('connected');
         }
       } catch (err) {
         console.error('Network error fetching from Supabase:', err);
+        loadLocalTodaySales(lastClosureTime);
       }
     } else {
-      // Offline fallback: load from local storage
-      todaySales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
+      loadLocalTodaySales(lastClosureTime);
     }
 
     updateStatsDashboard();
     renderTodaySalesTable();
+  }
+
+  function loadLocalTodaySales(lastClosureTime) {
+    const cachedSales = JSON.parse(localStorage.getItem('nakshathra_today_sales')) || [];
+    if (lastClosureTime) {
+      const lastClosureDate = new Date(lastClosureTime);
+      todaySales = cachedSales.filter(sale => {
+        const saleDate = new Date(sale.datetime);
+        return isNaN(saleDate.getTime()) || saleDate > lastClosureDate;
+      });
+    } else {
+      todaySales = cachedSales;
+    }
   }
 
   // 12. Google Sheets sync backup functions
@@ -511,7 +569,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const price = parseFloat(saleAmount.value);
     const qty = parseInt(saleQty.value);
-    const enteredItemName = saleItemName.value.trim() || ('Generic ' + selectedCategory);
+    const enteredItemName = saleItemName.value.trim();
+
+    if (!enteredItemName) {
+      showToast('Please enter a valid product item name', 'error');
+      return;
+    }
 
     if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
       showToast('Please enter valid sale details', 'error');
@@ -525,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSynced = false;
 
     // A. Sync to Supabase in real-time
-    if (isDbOnline && supabase) {
+    if (supabase) {
       try {
         const { data, error } = await supabase
           .from('sales')
@@ -545,6 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (data && data.length > 0) {
           finalId = data[0].no; // Grab PostgreSQL serial number key
           isSynced = true;
+          updateDbStatusBadge('connected');
         }
       } catch (err) {
         console.error('Supabase network error, using local fallback:', err);
@@ -591,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSyncedDelete = false;
 
     // If ID is numeric, it is a Supabase table primary serial key 'no'
-    if (isDbOnline && supabase && !isNaN(id)) {
+    if (supabase && !isNaN(id)) {
       try {
         const { error } = await supabase
           .from('sales')
@@ -600,6 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!error) {
           isSyncedDelete = true;
+          updateDbStatusBadge('connected');
         } else {
           console.error('Supabase deletion error:', error);
         }
@@ -637,12 +702,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let silverSum = 0;
     let goldSum = 0;
     let cosmeticSum = 0;
-    let italianSum = 0;
     
     let silverQty = 0;
     let goldQty = 0;
     let cosmeticQty = 0;
-    let italianQty = 0;
 
     let cashSum = 0;
     let upiSum = 0;
@@ -662,9 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (sale.category === 'Cosmetics') {
         cosmeticSum += sale.total;
         cosmeticQty += sale.qty;
-      } else if (sale.category === 'Italian Silver') {
-        italianSum += sale.total;
-        italianQty += sale.qty;
       }
 
       if (sale.payMode === 'Cash') cashSum += sale.total;
@@ -689,19 +749,18 @@ document.addEventListener('DOMContentLoaded', () => {
       silverTotal: silverSum,
       goldTotal: goldSum,
       cosmeticsTotal: cosmeticSum,
-      italianTotal: italianSum,
       itemCount: itemCount,
       items: todaySales
     };
 
     // Save locally
     historyClosures.push(closureEntry);
+    localStorage.setItem('nakshathra_last_closure_time', new Date().toISOString());
     
     // Submit category aggregates to the daily collections Google Form
     if (silverQty > 0) submitClosureToGoogleForm('Silver', silverQty, silverSum);
     if (goldQty > 0) submitClosureToGoogleForm('Gold Covering', goldQty, goldSum);
     if (cosmeticQty > 0) submitClosureToGoogleForm('Cosmetics', cosmeticQty, cosmeticSum);
-    if (italianQty > 0) submitClosureToGoogleForm('Italian Silver', italianQty, italianSum);
 
     todaySales = []; // clear local today entries
     saveToLocalStorage();
@@ -717,6 +776,282 @@ document.addEventListener('DOMContentLoaded', () => {
     
     showToast('Day closed and totals archived locally!');
   });
+
+  // Today PDF report download logic with popup blocker bypass
+  async function generateTodayPDFReport() {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up blocked! Please allow pop-ups for this website to generate PDF reports.');
+      return;
+    }
+    
+    printWindow.document.write('<html><head><title>Generating Report...</title><style>body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #666; }</style></head><body><h2>Generating PDF report, please wait...</h2></body></html>');
+    printWindow.document.close();
+
+    const salesList = todaySales.map(item => {
+      return {
+        timestamp: item.timestamp,
+        itemName: item.itemName,
+        category: item.category,
+        price: parseFloat(item.price),
+        qty: parseInt(item.qty),
+        total: parseFloat(item.total)
+      };
+    });
+
+    let totalRevenue = 0;
+    let totalItemsSold = 0;
+    let silverSum = 0;
+    let goldSum = 0;
+    let cosmeticsSum = 0;
+
+    salesList.forEach(item => {
+      totalRevenue += item.total;
+      totalItemsSold += item.qty;
+      if (item.category === 'Silver') silverSum += item.total;
+      else if (item.category === 'Gold Covering') goldSum += item.total;
+      else if (item.category === 'Cosmetics') cosmeticsSum += item.total;
+    });
+
+    const reportHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales Report - Today</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1a1a1a;
+      margin: 30px;
+      padding: 0;
+      line-height: 1.4;
+    }
+    .report-header {
+      text-align: center;
+      border-bottom: 3px double #d4af37;
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+    }
+    .report-header h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #111;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .report-header p {
+      margin: 5px 0 0 0;
+      font-size: 14px;
+      color: #666;
+    }
+    .report-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 25px;
+      font-size: 13px;
+      color: #555;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+    .summary-card {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 15px 20px;
+      background-color: #fafafa;
+    }
+    .summary-card-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 5px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .summary-card-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #111;
+    }
+    .breakdown-section {
+      margin-bottom: 25px;
+    }
+    .breakdown-section h2 {
+      font-size: 16px;
+      border-left: 3px solid #d4af37;
+      padding-left: 8px;
+      margin-bottom: 15px;
+      color: #111;
+    }
+    .breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .breakdown-box {
+      border: 1px solid #eee;
+      padding: 12px;
+      border-radius: 6px;
+      background-color: #fff;
+      text-align: center;
+    }
+    .breakdown-label {
+      font-size: 11px;
+      color: #777;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .breakdown-value {
+      font-size: 15px;
+      font-weight: bold;
+      color: #222;
+    }
+    .table-section h2 {
+      font-size: 16px;
+      border-left: 3px solid #666;
+      padding-left: 8px;
+      margin-bottom: 15px;
+      color: #111;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    th {
+      background-color: #f5f5f5;
+      border-bottom: 2px solid #ddd;
+      padding: 10px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      border-bottom: 1px solid #eee;
+      padding: 10px;
+    }
+    .price-col {
+      text-align: right;
+      font-family: monospace;
+    }
+    .qty-col {
+      text-align: center;
+    }
+    .total-col {
+      text-align: right;
+      font-family: monospace;
+      font-weight: 600;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 11px;
+      color: #999;
+      border-top: 1px solid #eee;
+      padding-top: 15px;
+    }
+    @media print {
+      body { margin: 20px; }
+      .summary-card { background-color: #fff; }
+      .breakdown-box { background-color: #fff; }
+      th { background-color: #f5f5f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-header">
+    <h1>NAKSHATHRA SILVER & GOLD COVERING</h1>
+    <p>Today's Sales Report</p>
+  </div>
+  
+  <div class="report-info">
+    <div><strong>Reporting Period:</strong> ${new Date().toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})} (Today)</div>
+    <div><strong>Generated On:</strong> ${new Date().toLocaleString()}</div>
+  </div>
+  
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="summary-card-title">Total Sales Revenue</div>
+      <div class="summary-card-value">${formatRupees(totalRevenue)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-title">Total Items Sold</div>
+      <div class="summary-card-value">${totalItemsSold}</div>
+    </div>
+  </div>
+
+  <div class="breakdown-section">
+    <h2>Category Breakdown</h2>
+    <div class="breakdown-grid">
+      <div class="breakdown-box">
+        <div class="breakdown-label">Silver</div>
+        <div class="breakdown-value">${formatRupees(silverSum)}</div>
+      </div>
+      <div class="breakdown-box">
+        <div class="breakdown-label">Gold Covering</div>
+        <div class="breakdown-value">${formatRupees(goldSum)}</div>
+      </div>
+      <div class="breakdown-box">
+        <div class="breakdown-label">Cosmetics</div>
+        <div class="breakdown-value">${formatRupees(cosmeticsSum)}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <h2>Transaction Records (${salesList.length} Entries)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Item Name</th>
+          <th>Category</th>
+          <th style="text-align: right;">Price</th>
+          <th style="text-align: center;">Qty</th>
+          <th style="text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${salesList.map(sale => `
+          <tr>
+            <td>${sale.timestamp}</td>
+            <td style="font-weight: 600;">${sale.itemName}</td>
+            <td>${sale.category}</td>
+            <td class="price-col">${formatRupees(sale.price)}</td>
+            <td class="qty-col">${sale.qty}</td>
+            <td class="total-col">${formatRupees(sale.total)}</td>
+          </tr>
+        `).join('')}
+        ${salesList.length === 0 ? '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">No sales transactions logged today.</td></tr>' : ''}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Nakshathra Silver & Gold Covering | Report Confirmed by Staff | Generated Automatically
+  </div>
+  
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(reportHtml);
+    printWindow.document.close();
+  }
 
   // 15. Initial Load Routing
   async function init() {
