@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('nakshathra_history_closures', JSON.stringify(historyClosures));
   }
 
-  // 8.5 Sync to Google Sheets Form in Background
+  // 8.5 Sync to Google Sheets Form in Background (Product Details)
   function submitToGoogleForm(sale) {
     const formUrl = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLScYuvQxdCGbylhwfnajD0pIJaL3emikSS8PP8qpeh27EpEoow/formResponse';
     const formData = new URLSearchParams();
@@ -324,6 +324,30 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .catch((err) => {
       console.error('Error submitting to Google Form:', err);
+    });
+  }
+
+  // 8.6 Sync Day Closure Categories to Google Form (Daily Collection)
+  function submitClosureToGoogleForm(itemType, qty, revenue) {
+    const formUrl = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLSfmhAtcHEk4TWmmxfSAgKul2DyXbjn_5D130diPEwGjTVHKBQ/formResponse';
+    const formData = new URLSearchParams();
+    formData.append('entry.464206022', itemType);
+    formData.append('entry.480730844', qty.toString());
+    formData.append('entry.1931948482', revenue.toString());
+
+    fetch(formUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString()
+    })
+    .then(() => {
+      console.log(`Successfully submitted closure for ${itemType} to Google Form`);
+    })
+    .catch((err) => {
+      console.error(`Error submitting closure for ${itemType} to Google Form:`, err);
     });
   }
 
@@ -380,30 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Sale logged successfully!');
   });
 
-  // 8.6 Sync Daily Closure Reports to Google Sheets Form
-  function submitClosureToGoogleForm(category, qty, revenue) {
-    const formUrl = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLSfmhAtcHEk4TWmmxfSAgKul2DyXbjn_5D130diPEwGjTVHKBQ/formResponse';
-    const formData = new URLSearchParams();
-    formData.append('entry.464206022', category);
-    formData.append('entry.480730844', qty.toString());
-    formData.append('entry.1931948482', revenue.toString());
-
-    fetch(formUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: formData.toString()
-    })
-    .then(() => {
-      console.log(`Successfully submitted closure report for ${category} to Google Form`);
-    })
-    .catch((err) => {
-      console.error(`Error submitting closure report for ${category}:`, err);
-    });
-  }
-
   // Deletion logic
   function deleteSale(id) {
     todaySales = todaySales.filter(s => s.id !== id);
@@ -426,10 +426,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirmClose) return;
 
     // Collect variables
-    let silverSum = 0, silverQty = 0;
-    let goldSum = 0, goldQty = 0;
-    let cosmeticSum = 0, cosmeticQty = 0;
-    let italianSum = 0, italianQty = 0;
+    let silverSum = 0;
+    let goldSum = 0;
+    let cosmeticSum = 0;
+    let italianSum = 0;
+    
+    let silverQty = 0;
+    let goldQty = 0;
+    let cosmeticQty = 0;
+    let italianQty = 0;
+
     let cashSum = 0;
     let upiSum = 0;
     let grandSum = 0;
@@ -456,12 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sale.payMode === 'Cash') cashSum += sale.total;
       else if (sale.payMode === 'UPI') upiSum += sale.total;
     });
-
-    // Submit closures to Google Forms (Daily Closure Form Sync)
-    if (silverQty > 0) submitClosureToGoogleForm('Silver', silverQty, silverSum);
-    if (goldQty > 0) submitClosureToGoogleForm('Gold Covering', goldQty, goldSum);
-    if (cosmeticQty > 0) submitClosureToGoogleForm('Cosmetics', cosmeticQty, cosmeticSum);
-    if (italianQty > 0) submitClosureToGoogleForm('Italian Silver', italianQty, italianSum);
 
     // Capture precise closure timestamp from system date and time
     const closeDateObj = new Date();
@@ -494,6 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save and shift
     historyClosures.push(closureEntry);
+    
+    // Submit category aggregates to the daily report Google Form
+    if (silverQty > 0) submitClosureToGoogleForm('Silver', silverQty, silverSum);
+    if (goldQty > 0) submitClosureToGoogleForm('Gold Covering', goldQty, goldSum);
+    if (cosmeticQty > 0) submitClosureToGoogleForm('Cosmetics', cosmeticQty, cosmeticSum);
+    if (italianQty > 0) submitClosureToGoogleForm('Italian Silver', italianQty, italianSum);
+
     todaySales = []; // clear today's entries
     saveToLocalStorage();
 
